@@ -8,11 +8,20 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 # -----------------------------
-# NLTK SETUP
+# SAFE NLTK SETUP
 # -----------------------------
-nltk.download('punkt')
-nltk.download('punkt_tab')
-nltk.download('stopwords')
+def download_nltk():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except:
+        nltk.download('punkt')
+
+    try:
+        nltk.data.find('corpora/stopwords')
+    except:
+        nltk.download('stopwords')
+
+download_nltk()
 
 # -----------------------------
 # LOAD BERT MODEL
@@ -154,7 +163,7 @@ def analyze_resume(resume_text, job_description):
         ml_prediction
     )
 
-    # Return (STRICT FORMAT)
+    # Final output (STRICT FORMAT)
     return {
         "score": final_score,
         "matched_skills": matched_skills,
