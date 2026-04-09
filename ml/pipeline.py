@@ -3,10 +3,39 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-# Ensure required resources (safe for demo use)
+from sentence_transformers import SentenceTransformer, util
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+
+# -----------------------------
+# NLTK SETUP
+# -----------------------------
 nltk.download('punkt')
 nltk.download('punkt_tab')
 nltk.download('stopwords')
+
+# -----------------------------
+# LOAD BERT MODEL
+# -----------------------------
+bert_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# -----------------------------
+# TRAIN SIMPLE ML MODEL
+# -----------------------------
+train_resumes = [
+    "Python developer with machine learning experience",
+    "Data scientist with NLP and deep learning",
+    "Frontend developer with HTML CSS JavaScript",
+    "Marketing and sales expert"
+]
+
+train_labels = [1, 1, 0, 0]
+
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(train_resumes)
+
+ml_model = LogisticRegression()
+ml_model.fit(X, train_labels)
 
 # -----------------------------
 # SKILL DATABASE
@@ -46,29 +75,59 @@ def extract_skills(tokens):
     return list(set(extracted_skills))
 
 # -----------------------------
-# SKILL SCORING
+# SKILL SCORE
 # -----------------------------
 def calculate_skill_score(matched_skills, job_skills):
     if len(job_skills) == 0:
         return 0
 
-    score = (len(matched_skills) / len(job_skills)) * 100
-    return round(score, 2)
+    return round((len(matched_skills) / len(job_skills)) * 100, 2)
 
 # -----------------------------
-# FEEDBACK GENERATION
+# BERT SIMILARITY
+# -----------------------------
+def compute_similarity(resume_text, job_description):
+    emb1 = bert_model.encode(resume_text, convert_to_tensor=True)
+    emb2 = bert_model.encode(job_description, convert_to_tensor=True)
+
+    score = util.pytorch_cos_sim(emb1, emb2)
+    return float(score)
+
+# -----------------------------
+# ML PREDICTION
+# -----------------------------
+def predict_resume_score(resume_text):
+    vector = vectorizer.transform([resume_text])
+    prediction = ml_model.predict(vector)[0]
+    return int(prediction)
+
+# -----------------------------
+# FINAL SCORE
+# -----------------------------
+def calculate_final_score(skill_score, similarity_score, ml_prediction):
+
+    similarity_score = similarity_score * 100
+    ml_score = ml_prediction * 100
+
+    final_score = (
+        0.4 * skill_score +
+        0.3 * similarity_score +
+        0.3 * ml_score
+    )
+
+    return round(final_score, 2)
+
+# -----------------------------
+# FEEDBACK
 # -----------------------------
 def generate_feedback(missing_skills):
     if not missing_skills:
         return "Excellent match for the job."
 
-    feedback = "You should improve the following skills: "
-    feedback += ", ".join(missing_skills)
-
-    return feedback
+    return "You should improve the following skills: " + ", ".join(missing_skills)
 
 # -----------------------------
-# FINAL PIPELINE FUNCTION
+# FINAL PIPELINE
 # -----------------------------
 def analyze_resume(resume_text, job_description):
 
@@ -76,7 +135,7 @@ def analyze_resume(resume_text, job_description):
     resume_tokens = preprocess_text(resume_text)
     job_tokens = preprocess_text(job_description)
 
-    # Extract skills
+    # Skills
     resume_skills = extract_skills(resume_tokens)
     job_skills = extract_skills(job_tokens)
 
@@ -84,16 +143,21 @@ def analyze_resume(resume_text, job_description):
     matched_skills = list(set(resume_skills) & set(job_skills))
     missing_skills = list(set(job_skills) - set(resume_skills))
 
-    # Score
-    score = calculate_skill_score(matched_skills, job_skills)
+    # Scores
+    skill_score = calculate_skill_score(matched_skills, job_skills)
+    similarity_score = compute_similarity(resume_text, job_description)
+    ml_prediction = predict_resume_score(resume_text)
 
-    # Feedback
-    feedback = generate_feedback(missing_skills)
+    final_score = calculate_final_score(
+        skill_score,
+        similarity_score,
+        ml_prediction
+    )
 
-    # Final output (DO NOT CHANGE FORMAT)
+    # Return (STRICT FORMAT)
     return {
-        "score": score,
+        "score": final_score,
         "matched_skills": matched_skills,
         "missing_skills": missing_skills,
-        "feedback": feedback
+        "feedback": generate_feedback(missing_skills)
     }
